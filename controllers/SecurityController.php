@@ -107,6 +107,7 @@ class SecurityController extends Controller
      */
     public function authenticate(ClientInterface $client)
     {
+        $this->layout = 'blank';
         $attributes = $client->getUserAttributes();
         $provider   = $client->getId();
         $clientId   = $attributes['id'];
