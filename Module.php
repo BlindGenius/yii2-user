@@ -51,6 +51,13 @@ class Module extends BaseModule
     public $enableRegistration = true;
 
     /**
+     * @var bool Whether to use a blank login layout.
+     * @description used when you dont want to
+     *  show navbar etc on login page
+     */
+    public $useBlankLogin = false;
+
+    /**
      * @var bool Whether to remove password field from registration form.
      */
     public $enableGeneratingPassword = false;

@@ -76,6 +76,10 @@ class SecurityController extends Controller
      */
     public function actionLogin()
     {
+        if ($this->module->useBlankLogin) {
+          $this->layout = 'blank';
+        }
+
         $model = $this->module->manager->createLoginForm();
 
         if ($model->load(\Yii::$app->getRequest()->post()) && $model->login()) {
