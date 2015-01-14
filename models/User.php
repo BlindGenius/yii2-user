@@ -14,6 +14,7 @@ namespace dektrium\user\models;
 use dektrium\user\Finder;
 use dektrium\user\helpers\Password;
 use dektrium\user\Mailer;
+use dektrium\user\Module;
 use yii\base\NotSupportedException;
 use yii\behaviors\TimestampBehavior;
 use yii\db\ActiveRecord;
@@ -49,6 +50,10 @@ class User extends ActiveRecord implements IdentityInterface
     const USER_CREATE_DONE   = 'user_create_done';
     const USER_REGISTER_INIT = 'user_register_init';
     const USER_REGISTER_DONE = 'user_register_done';
+
+    // following constants are used on secured email changing process
+    const OLD_EMAIL_CONFIRMED = 0b1;
+    const NEW_EMAIL_CONFIRMED = 0b10;
 
     /** @var string Plain password. Used for model validation. */
     public $password;
@@ -159,8 +164,8 @@ class User extends ActiveRecord implements IdentityInterface
         return [
             'register' => ['username', 'email', 'password'],
             'connect'  => ['username', 'email'],
-            'create'   => ['username', 'email', 'password', 'role'],
-            'update'   => ['username', 'email', 'password', 'role'],
+            'create'   => ['username', 'email', 'password'],
+            'update'   => ['username', 'email', 'password'],
             'settings' => ['username', 'email', 'password']
         ];
     }
@@ -262,15 +267,13 @@ class User extends ActiveRecord implements IdentityInterface
                 ]);
                 $token->link('user', $this);
                 $this->mailer->sendConfirmationMessage($this, $token);
-                \Yii::$app->session->setFlash('user.confirmation_sent');
             } else {
-                \Yii::$app->session->setFlash('user.registration_finished');
                 \Yii::$app->user->login($this);
             }
             if ($this->module->enableGeneratingPassword) {
                 $this->mailer->sendWelcomeMessage($this);
-                \Yii::$app->session->setFlash('user.password_generated');
             }
+            \Yii::$app->session->setFlash('info', $this->getFlashMessage());
             \Yii::getLogger()->log('User has been registered', Logger::LEVEL_INFO);
             return true;
         }
@@ -287,7 +290,6 @@ class User extends ActiveRecord implements IdentityInterface
      * If confirmation passes it will return true, otherwise it will return false.
      *
      * @param  string  $code Confirmation code.
-     * @return boolean
      */
     public function attemptConfirmation($code)
     {
@@ -299,7 +301,7 @@ class User extends ActiveRecord implements IdentityInterface
         ])->one();
 
         if ($token === null || $token->isExpired) {
-            return false;
+            \Yii::$app->session->setFlash('danger', \Yii::t('user', 'Confirmation link is invalid or out-of-date. You can try requesting a new one.'));
         }
 
         $token->delete();
@@ -310,7 +312,11 @@ class User extends ActiveRecord implements IdentityInterface
 
         \Yii::getLogger()->log('User has been confirmed', Logger::LEVEL_INFO);
 
-        return $this->save(false);
+        if ($this->save(false)) {
+            \Yii::$app->session->setFlash('success', \Yii::t('user', 'Your account has been successfully confirmed.'));
+        } else {
+            \Yii::$app->session->setFlash('danger', \Yii::t('user', 'Something went wrong and your account has not been confirmed.'));
+        }
     }
 
     /**
@@ -328,28 +334,36 @@ class User extends ActiveRecord implements IdentityInterface
         $token = $this->finder->findToken([
             'user_id' => $this->id,
             'code'    => $code,
-            'type'    => Token::TYPE_CONFIRM_NEW_EMAIL,
-        ])->one();
+        ])->andWhere(['in', 'type', [Token::TYPE_CONFIRM_NEW_EMAIL, Token::TYPE_CONFIRM_OLD_EMAIL]])->one();
 
         if (empty($this->unconfirmed_email) || $token === null || $token->isExpired) {
-            return false;
+            \Yii::$app->session->setFlash('danger', \Yii::t('user', 'Your confirmation token is invalid'));
         }
 
         $token->delete();
 
         if (empty($this->unconfirmed_email)) {
-            return false;
+            \Yii::$app->session->setFlash('danger', \Yii::t('user', 'An error occurred during your request'));
         } else if (static::find()->where(['email' => $this->unconfirmed_email])->exists() == false) {
-            $status = true;
-            $this->email = $this->unconfirmed_email;
-        } else {
-            $status = false;
+            if ($this->module->emailChangeStrategy == Module::STRATEGY_SECURE) {
+                switch ($token->type) {
+                    case Token::TYPE_CONFIRM_NEW_EMAIL:
+                        $this->flags |= self::NEW_EMAIL_CONFIRMED;
+                        \Yii::$app->session->setFlash('success', \Yii::t('user', 'Awesome, almost there. Now you need to click confirmation link sent to your old email address'));
+                        break;
+                    case Token::TYPE_CONFIRM_OLD_EMAIL:
+                        $this->flags |= self::OLD_EMAIL_CONFIRMED;
+                        \Yii::$app->session->setFlash('success', \Yii::t('user', 'Awesome, almost there. Now you need to click confirmation link sent to your new email address'));
+                        break;
+                }
+            }
+            if ($this->module->emailChangeStrategy == Module::STRATEGY_DEFAULT || ($this->flags & self::NEW_EMAIL_CONFIRMED && $this->flags & self::OLD_EMAIL_CONFIRMED)) {
+                $this->email = $this->unconfirmed_email;
+                $this->unconfirmed_email = null;
+                \Yii::$app->session->setFlash('success', \Yii::t('user', 'Your email has been successfully changed'));
+            }
+            $this->save(false);
         }
-
-        $this->unconfirmed_email = null;
-        $this->save(false);
-
-        return $status;
     }
 
     /**
@@ -393,7 +407,7 @@ class User extends ActiveRecord implements IdentityInterface
         if ($insert) {
             $this->setAttribute('auth_key', \Yii::$app->security->generateRandomString());
             if (\Yii::$app instanceof \yii\web\Application) {
-                $this->setAttribute('registration_ip', ip2long(\Yii::$app->request->userIP));
+                $this->setAttribute('registration_ip', \Yii::$app->request->userIP);
             }
         }
 
@@ -416,6 +430,22 @@ class User extends ActiveRecord implements IdentityInterface
             $profile->save(false);
         }
         parent::afterSave($insert, $changedAttributes);
+    }
+
+    /**
+     * @return string
+     */
+    protected function getFlashMessage()
+    {
+        if ($this->module->enableGeneratingPassword && $this->module->enableConfirmation) {
+            return \Yii::t('user', 'A message has been sent to your email address. It contains your password and a confirmation link that you must click to complete registration.');
+        } else if ($this->module->enableGeneratingPassword) {
+            return \Yii::t('user', 'A message has been sent to your email address. It contains a password that we generated for you.');
+        } else if ($this->module->enableConfirmation) {
+            return \Yii::t('user', 'A message has been sent to your email address. It contains a confirmation link that you must click to complete registration.');
+        } else {
+            return \Yii::t('user', 'Welcome! You have been successfully registered and logged in.');
+        }
     }
 
     /** @inheritdoc */

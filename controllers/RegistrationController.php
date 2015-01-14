@@ -15,9 +15,12 @@ use dektrium\user\Finder;
 use dektrium\user\models\RegistrationForm;
 use dektrium\user\models\ResendForm;
 use dektrium\user\models\User;
+use yii\base\Model;
 use yii\web\Controller;
 use yii\filters\AccessControl;
 use yii\web\NotFoundHttpException;
+use yii\web\Response;
+use yii\widgets\ActiveForm;
 
 /**
  * RegistrationController is responsible for all registration process, which includes registration of a new account,
@@ -72,8 +75,13 @@ class RegistrationController extends Controller
 
         $model = \Yii::createObject(RegistrationForm::className());
 
+        $this->performAjaxValidation($model);
+
         if ($model->load(\Yii::$app->request->post()) && $model->register()) {
-            return $this->render('finish');
+            return $this->render('/message', [
+                'title'  => \Yii::t('user', 'Account has been created'),
+                'module' => $this->module,
+            ]);
         }
 
         return $this->render('register', [
@@ -131,11 +139,12 @@ class RegistrationController extends Controller
             throw new NotFoundHttpException;
         }
 
-        if ($user->attemptConfirmation($code)) {
-            return $this->render('confirmation_finished');
-        } else {
-            return $this->render('invalid_token');
-        }
+        $user->attemptConfirmation($code);
+
+        return $this->render('/message', [
+            'title'  => \Yii::t('user', 'Account confirmation'),
+            'module' => $this->module,
+        ]);
     }
 
     /**
@@ -151,12 +160,31 @@ class RegistrationController extends Controller
 
         $model = \Yii::createObject(ResendForm::className());
 
+        $this->performAjaxValidation($model);
+
         if ($model->load(\Yii::$app->request->post()) && $model->resend()) {
-            return $this->render('finish');
+            return $this->render('/message', [
+                'title'  => \Yii::t('user', 'Confirmation link has been resent'),
+                'module' => $this->module,
+            ]);
         }
 
         return $this->render('resend', [
             'model' => $model
         ]);
+    }
+
+    /**
+     * Performs ajax validation.
+     * @param Model $model
+     * @throws \yii\base\ExitException
+     */
+    protected function performAjaxValidation(Model $model)
+    {
+        if (\Yii::$app->request->isAjax && $model->load(\Yii::$app->request->post())) {
+            \Yii::$app->response->format = Response::FORMAT_JSON;
+            echo json_encode(ActiveForm::validate($model));
+            \Yii::$app->end();
+        }
     }
 }

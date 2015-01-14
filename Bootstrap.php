@@ -23,22 +23,36 @@ use yii\console\Application as ConsoleApplication;
  */
 class Bootstrap implements BootstrapInterface
 {
-    /**
-     * @inheritdoc
-     */
+    /** @var array Model's map */
+    private $_modelMap = [
+        'User'             => 'dektrium\user\models\User',
+        'Account'          => 'dektrium\user\models\Account',
+        'Profile'          => 'dektrium\user\models\Profile',
+        'Token'            => 'dektrium\user\models\Token',
+        'RegistrationForm' => 'dektrium\user\models\RegistrationForm',
+        'ResendForm'       => 'dektrium\user\models\ResendForm',
+        'LoginForm'        => 'dektrium\user\models\LoginForm',
+        'SettingsForm'     => 'dektrium\user\models\SettingsForm',
+        'RecoveryForm'     => 'dektrium\user\models\RecoveryForm',
+        'UserSearch'       => 'dektrium\user\models\UserSearch',
+    ];
+
+    /** @inheritdoc */
     public function bootstrap($app)
     {
         /** @var $module Module */
-        if ($app->hasModule('user') && ($module = $app->getModule('user')) instanceof Module){
-            foreach ($module->modelMap as $name => $definition) {
+        if ($app->hasModule('user') && ($module = $app->getModule('user')) instanceof Module) {
+            $this->_modelMap = array_merge($this->_modelMap, $module->modelMap);
+            foreach ($this->_modelMap as $name => $definition) {
                 $class = "dektrium\\user\\models\\" . $name;
                 \Yii::$container->set($class, $definition);
-                if (is_array($definition)) {
-                    $module->modelMap = [$name => $class];
+                $modelName = is_array($definition) ? $definition['class'] : $definition;
+                $module->modelMap[$name] = $modelName;
+                if (in_array($name, ['User', 'Profile', 'Token', 'Account'])) {
+                    \Yii::$container->set($name . 'Query', function () use ($modelName) {
+                        return $modelName::find();
+                    });
                 }
-                \Yii::$container->set($name . 'Query', function () use ($module, $name) {
-                    return forward_static_call([$module->modelMap[$name], 'find']);
-                });
             }
             \Yii::$container->setSingleton(Finder::className(), [
                 'userQuery'    => \Yii::$container->get('UserQuery'),
@@ -77,6 +91,15 @@ class Bootstrap implements BootstrapInterface
                 'class'    => 'yii\i18n\PhpMessageSource',
                 'basePath' => __DIR__ . '/messages',
             ];
+
+            $defaults = [
+                'welcomeSubject'        => \Yii::t('user', 'Welcome to {0}', \Yii::$app->name),
+                'confirmationSubject'   => \Yii::t('user', 'Confirm account on {0}', \Yii::$app->name),
+                'reconfirmationSubject' => \Yii::t('user', 'Confirm email change on {0}', \Yii::$app->name),
+                'recoverySubject'       => \Yii::t('user', 'Complete password reset on {0}', \Yii::$app->name)
+            ];
+
+            \Yii::$container->set('dektrium\user\Mailer', array_merge($defaults, $module->mailer));
         }
         
     }
