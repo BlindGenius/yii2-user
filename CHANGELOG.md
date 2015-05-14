@@ -1,8 +1,40 @@
 # CHANGELOG
 
-## 0.9.3 [Work in progress]
+## 1.0.0-alpha [Work in progress]
 
-- `fix` Fixed bug on confirmation when there was a try to delete non existing token (anders-akero)
+- `enh` Regenerate `auth_key` after blocking the user (dmeroff)
+- `enh` Improved registration process #236 (dmeroff)
+- `fix` Ensure user/index works without php-intl extension #370 (thyseus)
+- `fix` Fixed display of confirmation time #361 (pedros80)
+- `fix` Do not limit username length to 25 chars #369 (thyseus)
+
+## 0.9.4 [6 April 2015]
+
+- `enh` Added ability to override translations (dmeroff)
+- `enh` Improved authentication via social networks (dmeroff)
+- `enh` Added Latvian translation (uldisn)
+- `enh` Added redirect to index page when logged in user tries to access login page (thiagotalma)
+- `fix` Updated Italian translation (maxxer)
+- `enh` Added usage of `adminEmail` param as default sender name if set (thiagotalma)
+- `enh` Added link to registration page on login form (thiagotalma)
+- `enh` Improved username regexp (thiagotalma)
+- `fix` Updated translations for Portuguese language (invaderhd & thiagotalma & andredp)
+- `enh` Added integration with Yii2-rbac (dmeroff)
+- `enh` Improved admin views and controller (dmeroff)
+- `enh` Added datepicker in user grid view (dmeroff)
+
+## 0.9.3 [9 February 2015]
+
+- `fix` Fixed bug with inability to connect network account #275 (dmeroff)
+- `enh` Added turkish translation (veyselsahin)
+- `enh` Added lithuanian translation (vilkazz)
+- `fix` Fixed button css on profile settings page (sosojni)
+- `enh` Hidden recovery link when `enablePasswordRecovery` is false (marsuboss)
+- `fix` Fixed gravatar hash creation (nigelterry)
+- `fix` Fixed invalid redirection after changing account settings (WeeSee)
+- `fix` Updated messages to be more readable (jspaine)
+- `fix` Reverted initialization of `user` component (dmeroff)
+- `fix` Fixed bug on confirmation and recovery when invalid token was used (anders-akero)
 
 ## 0.9.2 [14 January 2015]
 
