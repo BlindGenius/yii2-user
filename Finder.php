@@ -36,59 +36,49 @@ class Finder extends Object
     protected $profileQuery;
 
     /**
-     * @return ActiveQuery
+     * @inheritdoc
      */
-    public function getUserQuery()
+    public function __call( $name, $params )
     {
-        return $this->userQuery;
+      if (preg_match('/^([gs]et)([A-Z].+)/', $name, $matches) === 1 ) {
+        $var = Inflector::variablize($matches[2]);
+        if (($matches[1] == 'get') && $this->canGetProperty($var)) {
+          return $this->$var;
+        }
+
+        if (($matches[1] == 'set') && $this->canSetProperty($var)) {
+          $this->$var = $params;
+          return;
+        }
+      }
+
+      parent::__call($name,$params);
     }
 
     /**
-     * @return ActiveQuery
+     * @inheritdoc
      */
-    public function getTokenQuery()
+    public function __get($name)
     {
-        return $this->tokenQuery;
+      if ($this->canGetProperty($name)) {
+        return $this->{$name};
+      }
+
+      parent::__get($name);
+
     }
 
     /**
-     * @return ActiveQuery
+     * @inheritdoc
      */
-    public function getAccountQuery()
+    public function __set($name, $value)
     {
-        return $this->accountQuery;
-    }
+      if ($this->canSetProperty($name)) {
+        $this->{$name} = $value;
+        return;
+      }
 
-    /**
-     * @return ActiveQuery
-     */
-    public function getProfileQuery()
-    {
-        return $this->profileQuery;
-    }
-
-    /** @param ActiveQuery $accountQuery */
-    public function setAccountQuery(ActiveQuery $accountQuery)
-    {
-        $this->accountQuery = $accountQuery;
-    }
-
-    /** @param ActiveQuery $userQuery */
-    public function setUserQuery(ActiveQuery $userQuery)
-    {
-        $this->userQuery = $userQuery;
-    }
-
-    /** @param ActiveQuery $tokenQuery */
-    public function setTokenQuery(ActiveQuery $tokenQuery)
-    {
-        $this->tokenQuery = $tokenQuery;
-    }
-
-    /** @param ActiveQuery $profileQuery */
-    public function setProfileQuery(ActiveQuery $profileQuery)
-    {
-        $this->profileQuery = $profileQuery;
+      parent::__set($name, $value);
     }
 
     /**
